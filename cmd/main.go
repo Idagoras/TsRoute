@@ -13,7 +13,7 @@ func main(){
 		Password: "314159",
 		Dbname: "shiftroute",
 		Port: 5432,
-		SSLMode: "disabled",
+		SSLMode: "disable",
 		TimeZone: "Asia/Shanghai",
 	})
 	if err != nil{
@@ -27,7 +27,7 @@ func main(){
 		},
 		&model.GeoPoint{
 			Longitude: 113.4445,
-			Latitude: 23.2077,
+			Latitude: 23.0077,
 		},
 		st,
 	)
@@ -41,8 +41,8 @@ func main(){
 	dataLoader := store.NewGuangzhouTsDataLoader()
 	dataSaver := store.NewGuangzhouTsDataSaver()
 	analyst := biz.NewAnalyst(lbs)
-	filePath := "../dataset/guangzhou.csv"
-	savePath := "../result"
+	filePath := "../../dataset/guangzhou.csv"
+	savePath := "../../result"
 	experiment := biz.NewTsRouteExperiment(analyst,tsRoute,dataLoader,dataSaver,filePath,savePath)
 
 	err = experiment.Once("exp1",0.01,0.06,biz.ConcernTypeDuration)

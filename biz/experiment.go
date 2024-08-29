@@ -1,12 +1,16 @@
 package biz
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/idagoras/TsRoute/model"
+	log "github.com/sirupsen/logrus"
 )
 
 type TsRouteExperiment struct{
@@ -37,7 +41,7 @@ func NewTsRouteExperiment(
 }
 
 func(e *TsRouteExperiment) Once(id string, epsilon_small,epsilon_large float32,concernType int) error{
-	data, err := e.dataLoader.Load(e.readPath,0,1000)
+	data, err := e.dataLoader.Load(e.readPath,0,20)
 	if err != nil{
 		return err
 	}
@@ -53,10 +57,14 @@ func(e *TsRouteExperiment) Once(id string, epsilon_small,epsilon_large float32,c
 	}
 	for _, dt := range data{
 		pair, ok := dt.(model.StopPair)
+		if !(model.Between(e.tsRoute.gridManager.areaTopLeftPoint,e.tsRoute.gridManager.areaBottomRightPoint,&pair.Origin) && model.Between(e.tsRoute.gridManager.areaTopLeftPoint,e.tsRoute.gridManager.areaBottomRightPoint,&pair.Destination)){
+			continue
+		}
 		pairs = append(pairs, &pair)
 		if !ok{
 			return errors.New("read data failed,type error")
 		}
+		log.WithFields(log.Fields{"origin":pair.Origin,"destination":pair.Destination}).Info("Begin compute")
 		origin := pair.Origin
 		destination := pair.Destination
 		guessedRoute, err := e.tsRoute.GetOptimalRoute(
@@ -67,26 +75,48 @@ func(e *TsRouteExperiment) Once(id string, epsilon_small,epsilon_large float32,c
 			id,
 			concernType,
 		)
+		jsonByte, _ :=json.Marshal(guessedRoute)
+		fmt.Println(string(jsonByte))
 		if err != nil{
-			return err
+			if strings.Contains(err.Error(), "Client.Timeout exceeded") {
+				log.Error("request time out")
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			log.WithFields(log.Fields{"origin":pair.Origin,"destination":pair.Destination}).Info("Compute Get Error")
+			//return err
+			continue
 		}
+		log.WithFields(log.Fields{"origin":pair.Origin,"destination":pair.Destination}).Info("Compute Success")
 		routes = append(routes, guessedRoute)
+		//time.Sleep(1*time.Second)
 	}
 
 	analyseResult, err := e.analyst.Evaluate(metaData,pairs,routes)
 	if err != nil{
+		log.WithFields(
+			log.Fields{
+				"msg":"analyse failed",
+			},
+		).Error(err)
 		return err
 	}
-	savePath := e.savePath + "/" + GetNowTimeStampString() 
+	savePath := e.savePath + "/" + GetNowTimeStampString() + ".csv"
+	//fmt.Println(savePath)
 	err = e.dataSaver.Save(savePath,analyseResult)
 	if err != nil{
+		log.WithFields(
+			log.Fields{
+				"msg":"saved failed",
+			},
+		).Error(err)
 		return nil
 	}
 	return nil
 }
 
 func(e *TsRouteExperiment)MulipleTimes(k int,f func(int)(float32,float32,string,int)) error{
-	for i := 0 ; i < k ; k ++{
+	for i := 0 ; i < k ; i ++{
 		epsilon_0,epsilon_1,id,concernType := f(i)
 		err := e.Once(id,epsilon_0,epsilon_1,concernType)
 		if err != nil{
@@ -102,3 +132,6 @@ func GetNowTimeStampString() string{
 	timeStr := strconv.Itoa(int(nanosecond))
 	return timeStr
 }
+
+
+

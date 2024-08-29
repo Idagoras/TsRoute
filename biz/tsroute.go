@@ -20,7 +20,7 @@ const(
 )
 
 const(
-	GaoDeKey = ""
+	GaoDeKey = "39884b28c6fbf518b2c486b60121fb38"
 )
 
 type TsRouter struct{
@@ -57,6 +57,7 @@ func(r *TsRouter) GetOptimalRoute(epsilon0, epsilon1 float32,origin model.TsPoin
 	}
 	destPoints, _ := destGrid.GetAllPoints()
 	destDistances := destGrid.GetDistances(destination)
+	
 	var destHashs []string
 	var destFloatValues []float64
 	for _, p := range destPoints{
@@ -145,7 +146,7 @@ func(r *TsRouter) GetOptimalRoute(epsilon0, epsilon1 float32,origin model.TsPoin
 				return  err
 			}
 			rp, _ := rep.(model.GaoDeLbsTransportationRouteQueryResponse)
-			originRoute = &rp.Route
+			destRoute = &rp.Route
 			return nil
 		})
 		
@@ -153,7 +154,6 @@ func(r *TsRouter) GetOptimalRoute(epsilon0, epsilon1 float32,origin model.TsPoin
 		if err != nil{
 			return nil, err
 		}
-
 		routes = append(routes,originRoute.Join(route).Join(destRoute))
 	}
 
@@ -161,19 +161,19 @@ func(r *TsRouter) GetOptimalRoute(epsilon0, epsilon1 float32,origin model.TsPoin
 	for _, rt := range routes{
 		switch concernType{
 		case ConcernTypeCost:
-			if rt.GetCost() < result.GetCost(){
+			if rt.GetCost() < result.GetCost() && rt.GetCost() > 0{
 				result = rt
 			}
 		case ConcernTypeDistance:
-			if rt.GetDistance() < result.GetDistance(){
+			if rt.GetDistance() < result.GetDistance() && rt.GetDistance() > 0{
 				result = rt
 			}
 		case ConcernTypeDuration:
-			if rt.GetDuration() < result.GetDuration(){
+			if rt.GetDuration() < result.GetDuration() && rt.GetDistance() > 0{
 				result = rt
 			}
 		case ConcernTypeTransformNum:
-			if rt.GetTransformNum() < result.GetTransformNum(){
+			if rt.GetTransformNum() < result.GetTransformNum() && rt.GetTransformNum() > 0{
 				result = rt
 			}
 		}		

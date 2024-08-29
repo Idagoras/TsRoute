@@ -2,10 +2,12 @@ package biz
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/idagoras/TsRoute/model"
+	log "github.com/sirupsen/logrus"
 )
 
 type GridPartitionManager struct{
@@ -21,12 +23,18 @@ func NewGridPartitionManager(areaTopLeftPoint, areaBottomRightPoint model.TsPoin
 	grids := make(map[string]map[string]*model.TsGrid)
 	points , err := store.ListPointsBetween(areaTopLeftPoint.Lon(),areaTopLeftPoint.Lat(),areaBottomRightPoint.Lon(),areaBottomRightPoint.Lat())
 	if err != nil{
+		log.WithFields(log.Fields{"areaTopLeftPoint":areaTopLeftPoint,"areaBottomRightPoint":areaBottomRightPoint}).Error(err)
 		return nil,err
 	}
 	var p []model.TsPoint
 	for _, point := range points{
 		p = append(p, point)
 	}
+
+	log.WithFields(log.Fields{
+		"num":len(points),
+	}).Info("get points from store")
+	fmt.Println(len(points))
 	return &GridPartitionManager{
 		points: p,
 		grids: grids,
@@ -40,10 +48,10 @@ func NewGridPartitionManager(areaTopLeftPoint, areaBottomRightPoint model.TsPoin
 func(m *GridPartitionManager) AddPartition(xGridsNum, yGridsNum int, key string){
 	var grids map[string]*model.TsGrid
 	var ok bool
-	if grids, ok =  m.grids[key]; ok{
+	if _, ok =  m.grids[key]; ok{
 		return
 	}else{
-		grids := make(map[string]*model.TsGrid)
+		grids = make(map[string]*model.TsGrid)
 		m.grids[key] = grids
 	}
 	originX := m.areaTopLeftPoint.Lon()
@@ -72,12 +80,19 @@ func(m *GridPartitionManager) AddPartition(xGridsNum, yGridsNum int, key string)
 	}
 	size:= fmt.Sprintf("%f,%f",width,height)
 	m.partitionSize[key] = size 
+	log.WithFields(log.Fields{"key":key,"size":size}).Info("add partition success")
+	var gridKeys []string
+	for key := range m.grids[key]{
+		gridKeys = append(gridKeys, key)
+	}
+	log.WithFields(log.Fields{"girdKeys":gridKeys}).Info("partiton add gridKeys")
 
 }
 
 func(m *GridPartitionManager) GetGrid(key string,point model.TsPoint) *model.TsGrid{
 	size, ok := m.partitionSize[key]
 	if !ok{
+		log.WithFields(log.Fields{"key":key}).Error("key not exist in partitionSize Map")
 		return nil
 	}
 	sizeArr := strings.Split(size,",")
@@ -88,5 +103,56 @@ func(m *GridPartitionManager) GetGrid(key string,point model.TsPoint) *model.TsG
 	i := int((point.Lon() - originX)/float32(width))
 	j := int((point.Lat() - originY)/float32(height))
 	gridKey := fmt.Sprintf("%d,%d",i,j)
-	return m.grids[key][gridKey]
+
+	grid, ok :=m.grids[key][gridKey]
+	if !ok{
+		log.WithFields(log.Fields{"key":key,"partition":size,"gridkey":gridKey,"point":point}).Error("key not exist in grids Map")
+		return nil
+	}
+
+	return grid
+}
+
+func(m *GridPartitionManager)GetAllGrids(key string) []*model.TsGrid{
+	var result []*model.TsGrid
+	for _, grid := range m.grids[key]{
+		result = append(result, grid)
+	}
+	return result
+}
+
+func(m *GridPartitionManager)GetEdgesAndLinesInGrids(grid *model.TsGrid)([]string,[]*model.TsEdge,error){
+	points, err := grid.GetAllPoints()
+	if err != nil{
+		return nil,nil,err
+	}
+	var lines []string
+	var edges []*model.TsEdge
+	edgesMap := make(map[string]*model.TsEdge)
+	linesMap := make(map[string]struct{})
+
+	for _, point := range points{
+		stop, _ := point.(*model.TsStop)
+		edgesModel , err := m.store.ListPointsCanDirectedAchieved(stop.Id)
+		//fmt.Println(edgesModel)
+		if err != nil{
+			return nil,nil,err
+		}
+		for _, edgeModel := range edgesModel{
+			idArr := []string{edgeModel.StopId,edgeModel.ToStopId}
+			linesMap[edgeModel.LineId] = struct{}{}
+			sort.Strings(idArr)
+			edgesMap[idArr[0]+idArr[1]] = edgeModel
+		}
+	}
+
+	for line := range linesMap{
+		lines = append(lines, line)
+	}
+
+	for _, edge := range edgesMap{
+		edges = append(edges, edge)
+	}
+
+	return lines, edges, nil
 }

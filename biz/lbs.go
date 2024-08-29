@@ -30,6 +30,9 @@ func NewGaoDeLbsServer(timeout int) model.LbsServer{
 	}
 	return &GaoDeLbsServer{
 		client: client,
+		urls: map[int]string{
+			GaoDeLbsTransportationRouteQuery:"https://restapi.amap.com/v5/direction/transit/integrated",
+		},
 	}
 }
 
@@ -59,6 +62,8 @@ func(s *GaoDeLbsServer)Serve(serviceType int,request any)(response any, err erro
 		"destination":req.Destination,
 		"city1":req.City1,
 		"city2":req.City2,
+		"AlternativeRoute":"1",
+		"show_fields":"cost",
 	})
 
 	rep, err := s.client.Get(url)
@@ -73,6 +78,6 @@ func(s *GaoDeLbsServer)Serve(serviceType int,request any)(response any, err erro
 	if err != nil{
 		return nil, err
 	}
-
+	time.Sleep(1 * time.Second)
 	return responseObj, nil
 }

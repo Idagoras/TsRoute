@@ -17,6 +17,8 @@ type TsStore interface{
 	GetOptimalRoute(origin string,destination string)(*TsOptimalRoute,error)
 	InsertOptimalRoute(route *TsOptimalRoute) error
 	UpdateOptimalRoute(route *TsOptimalRoute) error
+	ListPointsCanDirectedAchieved(id string)([]*TsEdge, error)
+	ListPointsCanAchieved(id string, num int)([]*TsStop,error)
 }
 
 type TsStop struct{
@@ -55,6 +57,13 @@ type TsLine struct{
 	TotalPrice int `json:"total_price" gorm:"column:total_price"`
 	Direc string `json:"direc" gorm:"column:direc"`
 }
+
+type TsEdge struct{
+	StopId string `json:"stopId" gorm:"column:stop_id"`
+	ToStopId string `json:"toStopId" gorm:"column:to"`
+	LineId string `json:"lineId" gorm:"column:line_id"`
+}
+
 
 func(l *TsLine)TableName() string{
 	return "guangzhou_vehicle"

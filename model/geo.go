@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/dominikbraun/graph"
 )
 
@@ -47,8 +48,8 @@ type TsRoute interface{
 }
 
 type TsGrid struct{
-	topLeftPoint TsPoint
-	bottomRightPoint TsPoint
+	TopLeftPoint TsPoint
+	BottomRightPoint TsPoint
 	g graph.Graph[string,TsPoint]
 	points map[string]TsPoint
 }
@@ -58,9 +59,10 @@ func NewTsGrid(topleft , bottomRight TsPoint) *TsGrid{
 		return p.Hash()
 	})
 	return &TsGrid{
-		topLeftPoint: topleft,
-		bottomRightPoint: bottomRight,
+		TopLeftPoint: topleft,
+		BottomRightPoint: bottomRight,
 		g: g,
+		points: make(map[string]TsPoint),
 	}
 }
 
@@ -68,7 +70,7 @@ func (gd *TsGrid)AddPoint(p TsPoint) error{
 	if _, ok := gd.points[p.Hash()]; ok{
 		return nil
 	}
-	if between(gd.topLeftPoint,gd.bottomRightPoint,p){
+	if Between(gd.TopLeftPoint,gd.BottomRightPoint,p){
 		err := gd.g.AddVertex(p)
 		if err != nil{
 			return err
@@ -97,6 +99,10 @@ func (gd *TsGrid)GetAllPoints()([]TsPoint,error){
 	return result,nil
 }
 
+func (gd *TsGrid)GetPointsNum()int{
+	return len(gd.points)
+}
+
 func (gd *TsGrid)GetDistances(p TsPoint)map[string]float64{
 	distanceMap := make(map[string]float64)
 	for key, value := range gd.points{
@@ -106,7 +112,14 @@ func (gd *TsGrid)GetDistances(p TsPoint)map[string]float64{
 }
 
 func GetDistance(lat1, lat2, lng1, lng2 float64) float64 {
+	if lat1 == lat2 && lng1 == lng2{
+		return 0.0
+	}
     radius := 6371000.0 //6378137.0
+	LON1 := lng1
+	LON2 := lng2
+	LAT1 := lat1
+	LAT2 := lat2
     rad := math.Pi / 180.0
     lat1 = lat1 * rad
     lng1 = lng1 * rad
@@ -114,15 +127,23 @@ func GetDistance(lat1, lat2, lng1, lng2 float64) float64 {
     lng2 = lng2 * rad
     theta := lng2 - lng1
     dist := math.Acos(math.Sin(lat1)*math.Sin(lat2) + math.Cos(lat1)*math.Cos(lat2)*math.Cos(theta))
+	if math.IsNaN(dist){
+		log.WithFields(log.Fields{
+			"lat1":LAT1,
+			"lon1":LON1,
+			"lat2":LAT2,
+			"lon2":LON2,
+		}).Error("get NaN")
+	}
     return dist * radius / 1000
 }
 
-func between(topLeft TsPoint,bottomRight TsPoint,point TsPoint) bool{
+func Between(topLeft TsPoint,bottomRight TsPoint,point TsPoint) bool{
 	tf_lat := topLeft.Lat()
 	tf_lon := topLeft.Lon()
 	br_lat := bottomRight.Lat()
 	br_lon := bottomRight.Lon()
 	lon := point.Lon()
 	lat := point.Lat()
-	return lon >= br_lon && lon <= tf_lon && lat >= tf_lat && lat <= br_lat
+	return lon <= br_lon && lon >= tf_lon && lat <= tf_lat && lat >= br_lat
 }
